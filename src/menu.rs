@@ -271,6 +271,7 @@ pub fn context_menu<'a>(
                 children.push(sort_item(fl!("sort-by-name"), HeadingOptions::Name));
                 children.push(sort_item(fl!("sort-by-modified"), HeadingOptions::Modified));
                 children.push(sort_item(fl!("sort-by-size"), HeadingOptions::Size));
+                children.push(sort_item(fl!("sort-by-kind"), HeadingOptions::Kind));
                 if matches!(tab.location, Location::Desktop(..)) {
                     children.push(divider::horizontal::light().into());
                     children.push(
@@ -311,6 +312,7 @@ pub fn context_menu<'a>(
                 children.push(sort_item(fl!("sort-by-name"), HeadingOptions::Name));
                 children.push(sort_item(fl!("sort-by-modified"), HeadingOptions::Modified));
                 children.push(sort_item(fl!("sort-by-size"), HeadingOptions::Size));
+                children.push(sort_item(fl!("sort-by-kind"), HeadingOptions::Kind));
             }
         }
         (_, Location::Network(..)) => {
@@ -328,6 +330,7 @@ pub fn context_menu<'a>(
                 children.push(sort_item(fl!("sort-by-name"), HeadingOptions::Name));
                 children.push(sort_item(fl!("sort-by-modified"), HeadingOptions::Modified));
                 children.push(sort_item(fl!("sort-by-size"), HeadingOptions::Size));
+                children.push(sort_item(fl!("sort-by-kind"), HeadingOptions::Kind));
             }
         }
         (_, Location::Trash) => {
@@ -473,7 +476,7 @@ pub fn dialog_menu(
                         tab::HeadingOptions::Size,
                         false,
                     ),
-                    //TODO: sort by type
+                    sort_item(fl!("sort-by-kind"), tab::HeadingOptions::Kind, true),
                 ],
             ),
         ),
@@ -707,7 +710,7 @@ pub fn menu_bar<'a>(
                             tab::HeadingOptions::Size,
                             false,
                         ),
-                        //TODO: sort by type
+                        sort_item(fl!("sort-by-kind"), tab::HeadingOptions::Kind, true),
                     ],
                 ),
             ],

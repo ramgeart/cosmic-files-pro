@@ -209,6 +209,7 @@ impl Config {
             show_hidden: self.dialog.show_hidden,
             single_click: false,
             view: self.dialog.view,
+            show_list_separators: self.tab.show_list_separators,
         }
     }
 }
@@ -329,6 +330,8 @@ pub struct TabConfig {
     pub single_click: bool,
     /// Selected view, grid or list
     pub view: View,
+    /// Show separator lines between items in list view
+    pub show_list_separators: bool,
 }
 
 impl Default for TabConfig {
@@ -340,6 +343,7 @@ impl Default for TabConfig {
             show_hidden: false,
             single_click: false,
             view: View::List,
+            show_list_separators: true,
         }
     }
 }

@@ -51,7 +51,7 @@ use icu::{
 use image::{DynamicImage, ImageDecoder, ImageReader};
 use jxl_oxide::integration::JxlDecoder;
 use mime_guess::{Mime, mime};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
@@ -1676,6 +1676,7 @@ pub enum Message {
     SetSort(HeadingOptions, bool),
     TabComplete(PathBuf, Vec<(String, PathBuf)>),
     Thumbnail(PathBuf, ItemThumbnail),
+    ToggleFolderExpand(PathBuf),
     ToggleSort(HeadingOptions),
     Drop(Option<(Location, ClipboardPaste)>),
     DndHover(Location),
@@ -2495,6 +2496,7 @@ pub enum HeadingOptions {
     Modified,
     Size,
     TrashedOn,
+    Kind,
 }
 
 impl fmt::Display for HeadingOptions {
@@ -2504,6 +2506,7 @@ impl fmt::Display for HeadingOptions {
             Self::Modified => write!(f, "{}", fl!("modified")),
             Self::Size => write!(f, "{}", fl!("size")),
             Self::TrashedOn => write!(f, "{}", fl!("trashed-on")),
+            Self::Kind => write!(f, "{}", fl!("kind")),
         }
     }
 }
@@ -2515,6 +2518,7 @@ impl HeadingOptions {
             Self::Modified.to_string(),
             Self::Size.to_string(),
             Self::TrashedOn.to_string(),
+            Self::Kind.to_string(),
         ]
     }
 }
@@ -2585,6 +2589,7 @@ pub struct Tab {
     pub(crate) items_opt: Option<Vec<Item>>,
     pub dnd_hovered: Option<(Location, Instant)>,
     pub(crate) scrollable_id: widget::Id,
+    pub(crate) expanded_folders: FxHashSet<PathBuf>,
     select_focus: Option<usize>,
     select_range: Option<(usize, usize)>,
     clicked: Option<usize>,
@@ -2706,6 +2711,7 @@ impl Tab {
             parent_item_opt: None,
             items_opt: None,
             scrollable_id,
+            expanded_folders: FxHashSet::default(),
             select_focus: None,
             select_range: None,
             clicked: None,
@@ -4078,6 +4084,14 @@ impl Tab {
                     generation,
                 );
             }
+            Message::ToggleFolderExpand(path) => {
+                // Toggle expanded state for the folder
+                if self.expanded_folders.contains(&path) {
+                    self.expanded_folders.remove(&path);
+                } else {
+                    self.expanded_folders.insert(path);
+                }
+            }
             Message::ToggleSort(heading_option) => {
                 if !matches!(self.location, Location::Search(..)) {
                     let heading_sort = if self.sort_name == heading_option {
@@ -4356,6 +4370,24 @@ impl Tab {
                         }
                     } else {
                         check_reverse(b_time_deleted.cmp(&a_time_deleted), sort_direction)
+                    }
+                });
+            }
+            HeadingOptions::Kind => {
+                items.sort_by(|a, b| {
+                    let a_kind = a.1.mime.to_string();
+                    let b_kind = b.1.mime.to_string();
+                    if folders_first {
+                        match (a.1.metadata.is_dir(), b.1.metadata.is_dir()) {
+                            (true, false) => Ordering::Less,
+                            (false, true) => Ordering::Greater,
+                            _ => check_reverse(
+                                LANGUAGE_SORTER.compare(&a_kind, &b_kind),
+                                sort_direction,
+                            ),
+                        }
+                    } else {
+                        check_reverse(LANGUAGE_SORTER.compare(&a_kind, &b_kind), sort_direction)
                     }
                 });
             }
@@ -4655,7 +4687,8 @@ impl Tab {
         let name_width = 300.0;
         let modified_width = 200.0;
         let size_width = 100.0;
-        let condensed = size.width < (name_width + modified_width + size_width);
+        let kind_width = 150.0;
+        let condensed = size.width < (name_width + modified_width + size_width + kind_width);
 
         let (sort_name, sort_direction, _) = self.sort_options();
         let heading_item = |name, width, msg| {
@@ -4681,6 +4714,7 @@ impl Tab {
 
         let heading_row = widget::row::with_children([
             heading_item(fl!("name"), Length::Fill, HeadingOptions::Name),
+            heading_item(fl!("kind"), Length::Fixed(kind_width), HeadingOptions::Kind),
             if self.location == Location::Trash {
                 heading_item(
                     fl!("trashed-on"),
@@ -5335,6 +5369,7 @@ impl Tab {
         let TabConfig {
             show_hidden,
             icon_sizes,
+            show_list_separators,
             ..
         } = self.config;
 
@@ -5343,7 +5378,8 @@ impl Tab {
         let name_width = 300.0;
         let modified_width = 200.0;
         let size_width = 100.0;
-        let condensed = size.width < (name_width + modified_width + size_width);
+        let kind_width = 150.0;
+        let condensed = size.width < (name_width + modified_width + size_width + kind_width);
         let is_search = matches!(self.location, Location::Search(..));
         let icon_size = if condensed || is_search {
             icon_sizes.list_condensed()
@@ -5386,7 +5422,7 @@ impl Tab {
                     continue;
                 }
 
-                if count > 0 {
+                if count > 0 && show_list_separators {
                     column = column
                         .push(widget::container(horizontal_rule(1)).padding([0, rule_padding]));
                     y += 1.0;
@@ -5478,6 +5514,9 @@ impl Tab {
                         },
                     };
 
+                    // Display kind/mime type in a human-readable format
+                    let kind_text = item.mime.to_string();
+
                     let row = if condensed {
                         widget::row::with_children([
                             widget::icon::icon(item.icon_handle_list_condensed.clone())
@@ -5511,6 +5550,9 @@ impl Tab {
                             ])
                             .width(Length::Fill)
                             .into(),
+                            widget::text::body(kind_text.clone())
+                                .width(Length::Fixed(kind_width))
+                                .into(),
                             widget::text::body(modified_text.clone())
                                 .width(Length::Fixed(modified_width))
                                 .into(),
@@ -5522,13 +5564,48 @@ impl Tab {
                         .align_y(Alignment::Center)
                         .spacing(space_xxs)
                     } else {
+                        // Check if this is a directory and if it's expanded
+                        let is_dir = item.metadata.is_dir();
+                        let item_path_opt = item.path_opt().cloned();
+                        let is_expanded = item_path_opt.as_ref()
+                            .is_some_and(|p| self.expanded_folders.contains(p));
+                        
+                        // Build the row with optional expand/collapse icon for directories
+                        let expand_icon: Element<'_, Message> = if is_dir {
+                            let icon_name = if is_expanded {
+                                "pan-down-symbolic"
+                            } else {
+                                "pan-end-symbolic"
+                            };
+                            if let Some(path) = item_path_opt.clone() {
+                                crate::mouse_area::MouseArea::new(
+                                    widget::icon::from_name(icon_name)
+                                        .size(16)
+                                )
+                                .on_press(move |_| Message::ToggleFolderExpand(path.clone()))
+                                .into()
+                            } else {
+                                // Directory without path - show icon but no interaction
+                                widget::icon::from_name(icon_name)
+                                    .size(16)
+                                    .into()
+                            }
+                        } else {
+                            // Placeholder to keep alignment for non-directory items
+                            widget::Space::with_width(16).into()
+                        };
+                        
                         widget::row::with_children([
+                            expand_icon,
                             widget::icon::icon(item.icon_handle_list.clone())
                                 .content_fit(ContentFit::Contain)
                                 .size(icon_size)
                                 .into(),
                             widget::text::body(item.display_name.clone())
                                 .width(Length::Fill)
+                                .into(),
+                            widget::text::body(kind_text.clone())
+                                .width(Length::Fixed(kind_width))
                                 .into(),
                             widget::text::body(modified_text.clone())
                                 .width(Length::Fixed(modified_width))
@@ -5620,6 +5697,9 @@ impl Tab {
                                 ])
                                 .width(Length::Fill)
                                 .into(),
+                                widget::text::body(kind_text.clone())
+                                    .width(Length::Fixed(kind_width))
+                                    .into(),
                                 widget::text::body(modified_text.clone())
                                     .width(Length::Fixed(modified_width))
                                     .into(),
@@ -5638,6 +5718,9 @@ impl Tab {
                                     .into(),
                                 widget::text::body(item.display_name.clone())
                                     .width(Length::Fill)
+                                    .into(),
+                                widget::text::body(kind_text)
+                                    .width(Length::Fixed(kind_width))
                                     .into(),
                                 widget::text(modified_text)
                                     .width(Length::Fixed(modified_width))

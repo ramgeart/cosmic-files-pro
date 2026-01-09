@@ -2007,6 +2007,17 @@ impl App {
                         },
                     )
                 })
+                .add({
+                    widget::settings::item::builder(fl!("show-list-separators")).toggler(
+                        tab_config.show_list_separators,
+                        move |show_list_separators| {
+                            Message::TabConfig(TabConfig {
+                                show_list_separators,
+                                ..tab_config
+                            })
+                        },
+                    )
+                })
                 .into(),
         ])
         .into()
