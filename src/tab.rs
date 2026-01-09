@@ -5539,6 +5539,9 @@ impl Tab {
                             ])
                             .width(Length::Fill)
                             .into(),
+                            widget::text::body(kind_text.clone())
+                                .width(Length::Fixed(kind_width))
+                                .into(),
                             widget::text::body(modified_text.clone())
                                 .width(Length::Fixed(modified_width))
                                 .into(),
@@ -5651,6 +5654,9 @@ impl Tab {
                                 ])
                                 .width(Length::Fill)
                                 .into(),
+                                widget::text::body(kind_text.clone())
+                                    .width(Length::Fixed(kind_width))
+                                    .into(),
                                 widget::text::body(modified_text.clone())
                                     .width(Length::Fixed(modified_width))
                                     .into(),
