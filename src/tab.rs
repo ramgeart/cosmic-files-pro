@@ -5572,24 +5572,24 @@ impl Tab {
                         
                         // Build the row with optional expand/collapse icon for directories
                         let expand_icon: Element<'_, Message> = if is_dir {
-                            let path_for_msg = item_path_opt.clone();
                             let icon_name = if is_expanded {
                                 "pan-down-symbolic"
                             } else {
                                 "pan-end-symbolic"
                             };
-                            crate::mouse_area::MouseArea::new(
+                            if let Some(path) = item_path_opt.clone() {
+                                crate::mouse_area::MouseArea::new(
+                                    widget::icon::from_name(icon_name)
+                                        .size(16)
+                                )
+                                .on_press(move |_| Message::ToggleFolderExpand(path.clone()))
+                                .into()
+                            } else {
+                                // Directory without path - show icon but no interaction
                                 widget::icon::from_name(icon_name)
                                     .size(16)
-                            )
-                            .on_press(move |_| {
-                                if let Some(ref path) = path_for_msg {
-                                    Message::ToggleFolderExpand(path.clone())
-                                } else {
-                                    Message::ScrollTab(0.0) // No-op
-                                }
-                            })
-                            .into()
+                                    .into()
+                            }
                         } else {
                             // Placeholder to keep alignment for non-directory items
                             widget::Space::with_width(16).into()
