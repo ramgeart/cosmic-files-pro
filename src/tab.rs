@@ -2495,6 +2495,7 @@ pub enum HeadingOptions {
     Modified,
     Size,
     TrashedOn,
+    Kind,
 }
 
 impl fmt::Display for HeadingOptions {
@@ -2504,6 +2505,7 @@ impl fmt::Display for HeadingOptions {
             Self::Modified => write!(f, "{}", fl!("modified")),
             Self::Size => write!(f, "{}", fl!("size")),
             Self::TrashedOn => write!(f, "{}", fl!("trashed-on")),
+            Self::Kind => write!(f, "{}", fl!("kind")),
         }
     }
 }
@@ -2515,6 +2517,7 @@ impl HeadingOptions {
             Self::Modified.to_string(),
             Self::Size.to_string(),
             Self::TrashedOn.to_string(),
+            Self::Kind.to_string(),
         ]
     }
 }
@@ -4359,6 +4362,24 @@ impl Tab {
                     }
                 });
             }
+            HeadingOptions::Kind => {
+                items.sort_by(|a, b| {
+                    let a_kind = a.1.mime.to_string();
+                    let b_kind = b.1.mime.to_string();
+                    if folders_first {
+                        match (a.1.metadata.is_dir(), b.1.metadata.is_dir()) {
+                            (true, false) => Ordering::Less,
+                            (false, true) => Ordering::Greater,
+                            _ => check_reverse(
+                                LANGUAGE_SORTER.compare(&a_kind, &b_kind),
+                                sort_direction,
+                            ),
+                        }
+                    } else {
+                        check_reverse(LANGUAGE_SORTER.compare(&a_kind, &b_kind), sort_direction)
+                    }
+                });
+            }
         }
         Some(items)
     }
@@ -4655,7 +4676,8 @@ impl Tab {
         let name_width = 300.0;
         let modified_width = 200.0;
         let size_width = 100.0;
-        let condensed = size.width < (name_width + modified_width + size_width);
+        let kind_width = 150.0;
+        let condensed = size.width < (name_width + modified_width + size_width + kind_width);
 
         let (sort_name, sort_direction, _) = self.sort_options();
         let heading_item = |name, width, msg| {
@@ -4681,6 +4703,7 @@ impl Tab {
 
         let heading_row = widget::row::with_children([
             heading_item(fl!("name"), Length::Fill, HeadingOptions::Name),
+            heading_item(fl!("kind"), Length::Fixed(kind_width), HeadingOptions::Kind),
             if self.location == Location::Trash {
                 heading_item(
                     fl!("trashed-on"),
@@ -5335,6 +5358,7 @@ impl Tab {
         let TabConfig {
             show_hidden,
             icon_sizes,
+            show_list_separators,
             ..
         } = self.config;
 
@@ -5343,7 +5367,8 @@ impl Tab {
         let name_width = 300.0;
         let modified_width = 200.0;
         let size_width = 100.0;
-        let condensed = size.width < (name_width + modified_width + size_width);
+        let kind_width = 150.0;
+        let condensed = size.width < (name_width + modified_width + size_width + kind_width);
         let is_search = matches!(self.location, Location::Search(..));
         let icon_size = if condensed || is_search {
             icon_sizes.list_condensed()
@@ -5386,7 +5411,7 @@ impl Tab {
                     continue;
                 }
 
-                if count > 0 {
+                if count > 0 && show_list_separators {
                     column = column
                         .push(widget::container(horizontal_rule(1)).padding([0, rule_padding]));
                     y += 1.0;
@@ -5478,6 +5503,9 @@ impl Tab {
                         },
                     };
 
+                    // Display kind/mime type in a human-readable format
+                    let kind_text = item.mime.to_string();
+
                     let row = if condensed {
                         widget::row::with_children([
                             widget::icon::icon(item.icon_handle_list_condensed.clone())
@@ -5529,6 +5557,9 @@ impl Tab {
                                 .into(),
                             widget::text::body(item.display_name.clone())
                                 .width(Length::Fill)
+                                .into(),
+                            widget::text::body(kind_text.clone())
+                                .width(Length::Fixed(kind_width))
                                 .into(),
                             widget::text::body(modified_text.clone())
                                 .width(Length::Fixed(modified_width))
@@ -5638,6 +5669,9 @@ impl Tab {
                                     .into(),
                                 widget::text::body(item.display_name.clone())
                                     .width(Length::Fill)
+                                    .into(),
+                                widget::text::body(kind_text)
+                                    .width(Length::Fixed(kind_width))
                                     .into(),
                                 widget::text(modified_text)
                                     .width(Length::Fixed(modified_width))

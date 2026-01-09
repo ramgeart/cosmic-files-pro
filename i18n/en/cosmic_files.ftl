@@ -26,6 +26,7 @@ name = Name
 modified = Modified
 trashed-on = Trashed
 size = Size
+kind = Kind
 
 # Progress footer
 details = Details
@@ -285,6 +286,7 @@ calculating = Calculating...
 ## Settings
 settings = Settings
 single-click = Single click to open
+show-list-separators = Show list separators
 
 ### Appearance
 appearance = Appearance
@@ -314,6 +316,7 @@ remove-from-sidebar = Remove from sidebar
 sort-by-name = Sort by name
 sort-by-modified = Sort by modified
 sort-by-size = Sort by size
+sort-by-kind = Sort by kind
 sort-by-trashed = Sort by delete time
 remove-from-recents = Remove from recents
 
