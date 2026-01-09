@@ -51,7 +51,7 @@ use icu::{
 use image::{DynamicImage, ImageDecoder, ImageReader};
 use jxl_oxide::integration::JxlDecoder;
 use mime_guess::{Mime, mime};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
@@ -1676,6 +1676,7 @@ pub enum Message {
     SetSort(HeadingOptions, bool),
     TabComplete(PathBuf, Vec<(String, PathBuf)>),
     Thumbnail(PathBuf, ItemThumbnail),
+    ToggleFolderExpand(PathBuf),
     ToggleSort(HeadingOptions),
     Drop(Option<(Location, ClipboardPaste)>),
     DndHover(Location),
@@ -2588,6 +2589,7 @@ pub struct Tab {
     pub(crate) items_opt: Option<Vec<Item>>,
     pub dnd_hovered: Option<(Location, Instant)>,
     pub(crate) scrollable_id: widget::Id,
+    pub(crate) expanded_folders: FxHashSet<PathBuf>,
     select_focus: Option<usize>,
     select_range: Option<(usize, usize)>,
     clicked: Option<usize>,
@@ -2709,6 +2711,7 @@ impl Tab {
             parent_item_opt: None,
             items_opt: None,
             scrollable_id,
+            expanded_folders: FxHashSet::default(),
             select_focus: None,
             select_range: None,
             clicked: None,
@@ -4080,6 +4083,14 @@ impl Tab {
                     display_size,
                     generation,
                 );
+            }
+            Message::ToggleFolderExpand(path) => {
+                // Toggle expanded state for the folder
+                if self.expanded_folders.contains(&path) {
+                    self.expanded_folders.remove(&path);
+                } else {
+                    self.expanded_folders.insert(path);
+                }
             }
             Message::ToggleSort(heading_option) => {
                 if !matches!(self.location, Location::Search(..)) {
@@ -5553,7 +5564,39 @@ impl Tab {
                         .align_y(Alignment::Center)
                         .spacing(space_xxs)
                     } else {
+                        // Check if this is a directory and if it's expanded
+                        let is_dir = item.metadata.is_dir();
+                        let item_path_opt = item.path_opt().cloned();
+                        let is_expanded = item_path_opt.as_ref()
+                            .is_some_and(|p| self.expanded_folders.contains(p));
+                        
+                        // Build the row with optional expand/collapse icon for directories
+                        let expand_icon: Element<'_, Message> = if is_dir {
+                            let path_for_msg = item_path_opt.clone();
+                            let icon_name = if is_expanded {
+                                "pan-down-symbolic"
+                            } else {
+                                "pan-end-symbolic"
+                            };
+                            crate::mouse_area::MouseArea::new(
+                                widget::icon::from_name(icon_name)
+                                    .size(16)
+                            )
+                            .on_press(move |_| {
+                                if let Some(ref path) = path_for_msg {
+                                    Message::ToggleFolderExpand(path.clone())
+                                } else {
+                                    Message::ScrollTab(0.0) // No-op
+                                }
+                            })
+                            .into()
+                        } else {
+                            // Placeholder to keep alignment for non-directory items
+                            widget::Space::with_width(16).into()
+                        };
+                        
                         widget::row::with_children([
+                            expand_icon,
                             widget::icon::icon(item.icon_handle_list.clone())
                                 .content_fit(ContentFit::Contain)
                                 .size(icon_size)
